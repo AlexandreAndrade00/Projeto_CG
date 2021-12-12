@@ -1,6 +1,9 @@
+#include <GL/freeglut_std.h>
+#include <GL/gl.h>
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 
 #include "materiais.h"
 
@@ -18,20 +21,28 @@ void teclasNotAscii();
 void keyboard(unsigned char key, int x, int y);
 void drawCircle(int n, float radius, int textureIndex);
 void drawButtons(int offset);
-void drawBase(int texture);
+void drawBase();
 void drawAnalogic();
 void drawHomeButton();
 void drawSquareButton();
 void drawRightJoy();
 void drawLeftJoy();
-void drawCube(int texture);
+void drawCube();
 void drawPlus();
 void drawMinus();
 void desenhaTexto(char* string);
 void Loop();
 void texturas();
 void initLights();
-void materialLightProperties(GLfloat material[4][3]);
+void materialLightProperties(GLfloat material[4][4]);
+void turn_on_off_lights();
+void change_light_color();
+void draw_grelha_poligonos();
+void change_light_pos();
+void quad(int a,int b,int c,int d);
+void updateLightDirection();
+void drawMalhas();
+void drawGlassBox();
 
 GLint wScreen = 1920, hScreen = 1080;
 GLfloat	xC = 10.0, yC = 10.0, zC = 10.0;
@@ -40,68 +51,24 @@ GLfloat obsP[3];
 GLfloat angZoom = 45;
 GLfloat incZoom = 3;
 GLfloat rotateLeft1=0, rotateLeft2=0, posx=0.0, posy=0.0;
+GLfloat incFocoX=0, incFocoY=0;
 GLuint startList;
 GLUquadricObj *qobj;
 GLuint texture_list[NUM_TEXTURE];
+bool light1_pos;
+bool light0_flag;
+const GLfloat tam = 1;
 
-static GLfloat cubo[] = {
-    //front
-    0.0f, 0.0f, 0.0f,
-    1.0f, 0.0f, 0.0f,
-    1.0f, 1.0f, 0.0f,
-    0.0f, 1.0f, 0.0f,
-    // back
-    0.0f, 0.0f, -1.0f,
-    1.0f, 0.0f, -1.0f,
-    1.0f, 1.0f, -1.0f,
-    0.0f, 1.0f, -1.0f,
-    // right
-    1.0f, 0.0f, 0.0f,
-    1.0f, 0.0f, -1.0f,
-    1.0f, 1.0f, -1.0f,
-    1.0f, 1.0f, 0.0f,
-    // left
-    0.0f, 0.0f, 0.0f,
-    0.0f, 0.0f, -1.0f,
-    0.0f, 1.0f, -1.0f,
-    0.0f, 1.0f, 0.0f,
-    // top
-    0.0f, 1.0f, 0.0f,
-    1.0f, 1.0f, 0.0f,
-    1.0f, 1.0f, -1.0f,
-    0.0f, 1.0f, -1.0f,
-    // bottom
-    0.0f, 0.0f, 0.0f,
-    1.0f, 0.0f, 0.0f,
-    1.0f, 0.0f, -1.0f,
-    0.0f, 0.0f, -1.0f,
-};
-
-static GLfloat texturas_cubo[] = {
-    0, 0, 
-    1, 0, 
-    1, 1, 
-    0, 1, 
-    0, 0,
-    1, 0,
-    1, 1,
-    0, 1,
-    0, 0,
-    1, 0,
-    1, 1,
-    0, 1,
-    0, 0, 
-    1, 0, 
-    1, 1, 
-    0, 1,
-    0, 0, 
-    1, 0, 
-    1, 1, 
-    0, 1,
-    0, 0, 
-    1, 0, 
-    1, 1, 
-    0, 1
+GLfloat ver[8][3] = 
+{
+    {-1.0,-1.0,1.0},
+    {-1.0,1.0,1.0},
+    {1.0,1.0,1.0},
+    {1.0,-1.0,1.0},
+    {-1.0,-1.0,-1.0},
+    {-1.0,1.0,-1.0},
+    {1.0,1.0,-1.0},
+    {1.0,-1.0,-1.0},
 };
 
 
@@ -127,29 +94,24 @@ int main(int argc, char** argv) {
 
 void start() {
     
-	qobj = gluNewQuadric();
+    qobj = gluNewQuadric();
 
-    glClearColor(0.75, 0.75, 0.75, 1);
+    glClearColor(0.75, 0.75, 0.75, 0);
     glEnable(GL_DEPTH_TEST);
-    glEnable(GL_NORMALIZE);
     glEnable(GL_LIGHTING);
-    glEnable(GL_LIGHT0);
-
+    glEnable(GL_NORMALIZE);
+    glEnable(GL_BLEND);
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
     glShadeModel(GL_SMOOTH);
-
-    glVertexPointer(3, GL_FLOAT, 0, cubo);
-	glEnableClientState(GL_VERTEX_ARRAY);
-
-    glTexCoordPointer(2, GL_FLOAT, 0, texturas_cubo);
-	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 
     obsP[0]=rVisao * cos(aVisao);
     obsP[1]=3.0;
     obsP[2]=rVisao * sin(aVisao);
 
-    texturas();
-    initLights();
+    light1_pos = 0;
 
+    initLights();
+    texturas();
 }
 
 
@@ -158,13 +120,13 @@ void texturas() {
     unsigned char *data;
     char* texture_name[] = {"images/a_button.png", "images/x_button.png", "images/y_button.png", "images/b_button.png",
                             "images/right_button.png", "images/up_button.png", "images/left_button.png", "images/down_button.png",
-                            "images/joystick_1.png", "images/blue_plastic.png", "images/red_plastic.png", "images/glass.png"};
+                            "images/joystick_1.png", "images/blue_plastic.png", "images/red_plastic.png", "images/price_tag.png"};
 
     for (int i=0; i<NUM_TEXTURE; i++) {
         glGenTextures(1, &texture_list[i]);
         glBindTexture(GL_TEXTURE_2D, texture_list[i]);
         // set the texture wrapping/filtering options (on the currently bound texture object)
-        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_DECAL);
+        glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
         glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
@@ -206,7 +168,6 @@ void display() {
 	glLoadIdentity();
 	gluLookAt(obsP[0],obsP[1],obsP[2], 0, 0, 0, 0, 1, 0);
 
-    drawAxis();
     drawObjects();
 
     glViewport(0, 0, wScreen/4, hScreen/4);
@@ -214,8 +175,8 @@ void display() {
     gluLookAt(-4, 0, 1, -4, 2, 0, 0, 1, 0);
     
     drawObjects();
+    glLoadIdentity();
 
-    glFlush();
     glutSwapBuffers();
 }
 
@@ -246,28 +207,21 @@ void drawAxis() {
 
 void drawObjects() {
 
-	glPushMatrix();
-    glTranslatef(4, 0, 0);
-	glRotatef(90, 1, 0, 0);
 	drawRightJoy();
-	glPopMatrix();
-
-
-    glPushMatrix();
-    glTranslatef(-4, 0, 0);
-	glRotatef(90, 1, 0, 0);
 	drawLeftJoy();
-	glPopMatrix();
+    drawMalhas();
 
     glPushMatrix();
-    glTranslatef(-3.25, -2.25, 0);
-    glScalef(6.5, 4.2, -0.2);
-    drawCube(-2);
+    glTranslatef(0, -0.5, 0);
+    glScalef(3.7, 2.5, 0.2);
+    materialLightProperties(blackPlastic);
+    drawCube();
     glPopMatrix();
 
     glPushMatrix();
     glColor3f(0, 1, 1);
-    glTranslatef(posx, posy, 0.3);
+    materialLightProperties(white);
+    glTranslatef(posx, posy, 0.21);
     glScalef(0.2, 0.2, 1);
     glBegin(GL_QUADS);
     glVertex3f(0.0f, 0.0f, 0.0f);
@@ -277,6 +231,7 @@ void drawObjects() {
     glEnd();
     glPopMatrix();
 
+    drawGlassBox();
 }
 
 
@@ -326,23 +281,66 @@ void keyboard(unsigned char key, int x, int y) {
             if (rotateLeft2 < 20)
                 rotateLeft2+=3;
             break;
+        case 'i':
+        case 'I':
+            incFocoY += 0.01;
+            updateLightDirection();
+            break;
+        case 'k':
+        case 'K':
+            incFocoY -= 0.01;
+            updateLightDirection();
+            break;
+        case 'l':
+        case 'L':
+            incFocoX += 0.01;
+            updateLightDirection();
+            break;
+        case 'j':
+        case 'J':
+            incFocoX -= 0.01;
+            updateLightDirection();
+            break;
+        case 'o':
+        case 'O':
+            turn_on_off_lights();
+            break;
+
+        case 'c':
+        case 'C':
+            change_light_color();
+            break;
+        case 'm':
+        case 'M':
+            change_light_pos();
+            break;
+
    }
 
-   glutPostRedisplay();
+    glutPostRedisplay();
 }
 
 void drawRightJoy() {
-	glPushMatrix();
 
+    glPushMatrix();
+
+    glTranslatef(4.5, 0, 0);
+
+    glPushMatrix();
+	glColor4f(0.85, 0.117647059, 0.094117647, 1);
+    materialLightProperties(redPlastic);
+    glTranslatef(0, -0.5, 0);
+	drawBase();
+	glPopMatrix();
+
+    glPushMatrix();
+
+    glRotatef(90,1, 0, 0);
+
+    glPushMatrix();
 	glTranslatef(0, 0.3, -1.1);
     materialLightProperties(blackPlastic);
     drawButtons(0);
-	glPopMatrix();
-
-	glPushMatrix();
-	glColor4f(0.85, 0.117647059, 0.094117647, 1);
-    materialLightProperties(redPlastic);
-	drawBase(-1);
 	glPopMatrix();
 
 	glPushMatrix();
@@ -363,22 +361,33 @@ void drawRightJoy() {
 	glPopMatrix();
 
 	glPopMatrix();
+
+    glPopMatrix();
 }
 
 
 void drawLeftJoy() {
+
     glPushMatrix();
+
+    glTranslatef(-4.5, 0, 0);
+
+    glPushMatrix();
+	glColor4f(0, 0.70, 1, 1);
+    materialLightProperties(cyanPlastic);
+    glTranslatef(0, -0.5, 0);
+	drawBase();
+	glPopMatrix();
     
+    glPushMatrix();
+
+    glRotatef(90, 1, 0, 0);
+
+    glPushMatrix();
 	glTranslatef(0, 0.3, 0.3);
     materialLightProperties(blackPlastic);
     drawButtons(4);
-	glPopMatrix();
-
-	glPushMatrix();
-	glColor4f(0, 0.70, 1, 1);
-    materialLightProperties(cyanPlastic);
-	drawBase(-1);
-	glPopMatrix();
+    glPopMatrix();
 
 	glPushMatrix();
 	glTranslatef(0, 0, -1.1);
@@ -393,11 +402,38 @@ void drawLeftJoy() {
     glPopMatrix();
 
     glPushMatrix();
-    glTranslatef(0.1, 0.2, 1.16);
+    glTranslatef(0.1, 0.2, 1.34);
     drawSquareButton();
     glPopMatrix();
 
 	glPopMatrix();
+
+    glPopMatrix();
+}
+
+void drawMalhas() {
+
+    glPushMatrix();
+    materialLightProperties(screen);
+    glTranslatef(-3.5, -2.8, 0.205);
+    glScalef(3.5, 2.3, 1);
+    draw_grelha_poligonos();
+    glPopMatrix();
+
+    glPushMatrix();
+    materialLightProperties(redPlastic);
+    glTranslatef(3.7, -3, 0.205);
+    glScalef(0.8, 2.5, 1);
+    draw_grelha_poligonos();
+    glPopMatrix();
+
+    glPushMatrix();
+    materialLightProperties(cyanPlastic);
+    glTranslatef(-5.3, -3, 0.205);
+    glScalef(0.8, 2.5, 1);
+    draw_grelha_poligonos();
+    glPopMatrix();
+
 }
 
 void drawCircle(int n, float radius, int textureIndex) {
@@ -407,6 +443,8 @@ void drawCircle(int n, float radius, int textureIndex) {
         glBindTexture(GL_TEXTURE_2D, texture_list[textureIndex]);
     }
 
+    glPushMatrix();
+    glNormal3f(0, 0, -1);
     glBegin(GL_POLYGON);
     for (int i = 0; i < n; i++) {
         float x = radius * cos(i * PI * (360 / (float) n) / 180.0);
@@ -420,6 +458,8 @@ void drawCircle(int n, float radius, int textureIndex) {
         glVertex2f(x, y);
     }
     glEnd();
+    //glNormal3f(0, 0, 1);
+    glPopMatrix();
 
     if (textureIndex!=-1)
         glDisable(GL_TEXTURE_2D);
@@ -430,41 +470,47 @@ void drawButtons(int offset) {
 	glPushMatrix();
 
 	glColor3f(0, 0, 0);
-    materialLightProperties(blackPlastic);
     glRotatef(90, 1, 0, 0);
 
     glPushMatrix();
 	glTranslatef(0.3, 0, 0);
+    materialLightProperties(blackPlastic);
     gluCylinder(qobj, 0.15, 0.15, 0.1, 30, 5);
+    materialLightProperties(white);
 	drawCircle(100, 0.15, 0+offset);
     glPopMatrix();
 
 	glPushMatrix();
 	glTranslatef(-0.3, 0, 0);
+    materialLightProperties(blackPlastic);
     gluCylinder(qobj, 0.15, 0.15, 0.1, 30, 5);
+    materialLightProperties(white);
 	drawCircle(100, 0.15, 2+offset);
     glPopMatrix();
 
 	glPushMatrix();
 	glTranslatef(0, 0.3, 0);
+    materialLightProperties(blackPlastic);
     gluCylinder(qobj, 0.15, 0.15, 0.1, 30, 5);
+    materialLightProperties(white);
 	drawCircle(100, 0.15, 3+offset);
     glPopMatrix();
 
 	glPushMatrix();
 	glTranslatef(0, -0.3, 0);
+    materialLightProperties(blackPlastic);
     gluCylinder(qobj, 0.15, 0.15, 0.1, 30, 5);
+    materialLightProperties(white);
 	drawCircle(100, 0.15,1+offset);
     glPopMatrix();
 
 	glPopMatrix();
 }
 
-void drawBase(int texture) {
+void drawBase() {
 	glPushMatrix();
-	glTranslatef(-0.75, 0, 2.25);
-	glScalef(1.5, 0.2, 4.2);
-	drawCube(texture);
+	glScalef(0.8, 2.5, 0.2);
+	drawCube();
 	glPopMatrix();
 }
 
@@ -477,11 +523,13 @@ void drawAnalogic() {
 	glRotatef(90, 1, 0, 0);
 	glTranslatef(0, 0, -0.55);
     gluCylinder(qobj, 0.3, 0.1, 0.1, 30, 5);
+    materialLightProperties(white);
 	drawCircle(100, 0.3, 8);
     glPopMatrix();
 
 	glPushMatrix();
 	glColor3f(0, 0, 0);
+    materialLightProperties(blackPlastic);
 	glRotatef(90, 1, 0, 0);
 	glTranslatef(0, 0, -0.45);
 	gluCylinder(qobj, 0.09, 0.09, 0.2, 30, 5);
@@ -518,8 +566,9 @@ void drawSquareButton() {
     glPushMatrix();
 
     glPushMatrix();
-    glScalef(0.25, 0.05, 0.25);
-    drawCube(-1);
+    glTranslatef(0.11, 0, -0.11);
+    glScalef(0.12, 0.05, 0.12);
+    drawCube();
     glPopMatrix();
 
     glPushMatrix();
@@ -533,85 +582,196 @@ void drawSquareButton() {
     glPopMatrix();
 }
 
-void drawCube(int texture) {
-    GLuint front[] =  {3, 2, 1, 0};
-    GLuint back[] =  {7, 6, 5, 4};
-    GLuint right[] =  {11, 10, 9, 8};
-    GLuint left[] =  {15, 14, 13, 12};
-    GLuint top[] =  {19, 18, 17, 16};
-    GLuint bottom[] =  {23, 22, 21, 20};
-
-    if (texture>-1) {
-        glEnable(GL_TEXTURE_2D);
-        glBindTexture(GL_TEXTURE_2D, texture_list[texture]);
-    }
-
-    if (texture==-2) {
-        materialLightProperties(screen);
-        glDrawElements(GL_POLYGON, 4, GL_UNSIGNED_INT, back);
-        materialLightProperties(blackPlastic);
-    } else 
-        glDrawElements(GL_POLYGON, 4, GL_UNSIGNED_INT, back);
-    glDrawElements(GL_POLYGON, 4, GL_UNSIGNED_INT, front);
-    glDrawElements(GL_POLYGON, 4, GL_UNSIGNED_INT, right);
-    glDrawElements(GL_POLYGON, 4, GL_UNSIGNED_INT, left);
-    glDrawElements(GL_POLYGON, 4, GL_UNSIGNED_INT, top);
-    glDrawElements(GL_POLYGON, 4, GL_UNSIGNED_INT, bottom);
-
-    if (texture>-1 && texture !=11)
-        glDisable(GL_TEXTURE_2D);
+void drawCube() {
+    glPushMatrix();
+    
+    glNormal3f(0, 0, 1);
+    quad(0,3,2,1);
+    //glNormal3f(1, 0, 0);
+    quad(2,3,7,6);
+    //glNormal3f(0, -1, 0);
+    quad(0,4,7,3);
+    //glNormal3f(0, 1, 0);
+    quad(1,2,6,5);
+    //glNormal3f(0, 0, -1);
+    quad(4,5,6,7);
+    //glNormal3f(-1, 0, 0);
+    quad(0,1,5,4);
+    
+    glPopMatrix();
 }
 
 void drawPlus() {
 	glPushMatrix();
-	glColor3f(0, 0, 0);
-    materialLightProperties(blackPlastic);
+        glColor3f(0, 0, 0);
+        materialLightProperties(blackPlastic);
 
-	glPushMatrix();
-	glScalef(0.2, 0.05, 0.05);
-	drawCube(-1);
-	glPopMatrix();
+        glPushMatrix();
+            glScalef(0.1, 0.05, 0.03);
+            drawCube();
+        glPopMatrix();
 
-	glPushMatrix();
-	glTranslatef(0.075, 0, 0.075);
-	glScalef(0.05, 0.05, 0.2);
-	drawCube(-1);
-	glPopMatrix();
+        glPushMatrix();
+            glTranslatef(0.01, 0, 0.01);
+            glScalef(0.03, 0.05, 0.1);
+            drawCube();
+        glPopMatrix();
+    glPopMatrix();
 }
 
 
 void drawMinus() {
 	glPushMatrix();
-	glColor3f(0, 0, 0);
-    materialLightProperties(blackPlastic);
+        glColor3f(0, 0, 0);
+        materialLightProperties(blackPlastic);
 
-	glPushMatrix();
-	glScalef(0.2, 0.05, 0.05);
-	drawCube(-1);
-	glPopMatrix();
+        glPushMatrix();
+            glScalef(0.1, 0.05, 0.03);
+            drawCube();
+        glPopMatrix();
 
 	glPopMatrix();
+}
+
+void drawGlassBox() {
+
+    glPushMatrix();
+    materialLightProperties(trans);
+    glTranslatef(0, -0.5, 0);
+    glScalef(6, 3, 1);
+    drawCube();
+    glPopMatrix();
+
+    glEnable(GL_TEXTURE_2D);
+    glBindTexture(GL_TEXTURE_2D, texture_list[11]);
+    glPushMatrix();
+    glNormal3f(0, 0, 1);
+    materialLightProperties(white);
+    glTranslatef(-5.4, 2, 0.01);
+    glScalef(0.6, 0.5, 1);
+    glBegin(GL_QUADS);
+    glTexCoord2f(0, 0);
+    glVertex3fv(ver[0]);
+    glTexCoord2f(1, 0);
+    glVertex3fv(ver[3]);
+    glTexCoord2f(1, 1);
+    glVertex3fv(ver[2]);
+    glTexCoord2f(0, 1);
+    glVertex3fv(ver[1]);
+    glEnd();
+    glPopMatrix();
+    glDisable(GL_TEXTURE_2D);
+
+}
+
+void quad(int a,int b,int c,int d) {
+    glBegin(GL_QUADS);
+    glVertex3fv(ver[a]);
+    glVertex3fv(ver[b]);
+    glVertex3fv(ver[c]);
+    glVertex3fv(ver[d]);
+    glEnd();
+}
+
+
+void draw_grelha_poligonos() {
+    glPushMatrix();
+    glNormal3f(0, 0, 1);
+    GLint dim = 512;   //numero divisoes da grelha
+    int	i, j;
+	float med_dim = (float)dim / 2;
+	glBegin(GL_QUADS);
+	for (i = 0; i < dim; i++)
+		for (j = 0; j < dim; j++) {
+			glVertex3d((float)j / med_dim, (float)i / med_dim, 0);
+			glVertex3d((float)(j + 1) / med_dim, (float)i / med_dim, 0);
+			glVertex3d((float)(j + 1) / med_dim, (float)(i + 1) / med_dim, 0);
+			glVertex3d((float)j / med_dim, (float)(i + 1) / med_dim, 0);
+		}
+	glEnd();
+    glPopMatrix();
 }
 
 
 void initLights() {
-    GLfloat ambientColor[] = {0.1, 0.1, 0.1, 0.0};
+    GLfloat ambientColor[] = {0.0, 0.0, 0.0, 0.0};
     glLightModelfv(GL_LIGHT_MODEL_AMBIENT, ambientColor);
 
-    GLfloat light0_pos[] = {2.0, -2.0, 5.0, 1.0};
-    GLfloat light0_colorAmb[] = {0, 0, 0, 0.0};
-    GLfloat light0_colorDif[] = {1.0, 1.0, 1.0, 0};
-    GLfloat light0_colorSpec[] = {1.0, 1.0, 1.0, 0};
+    GLfloat light0_pos[] = {0.0, 0.0, 20.0, 0.0};
+    GLfloat light0_colorDif[] = {0.5, 0.5, 0.5, 1};
+    GLfloat light0_colorSpec[] = {1.0, 1.0, 1.0, 1};
     glLightfv(GL_LIGHT0, GL_POSITION, light0_pos);
-    glLightfv(GL_LIGHT0, GL_AMBIENT, light0_colorAmb);
     glLightfv(GL_LIGHT0, GL_DIFFUSE, light0_colorDif);
     glLightfv(GL_LIGHT0, GL_SPECULAR, light0_colorSpec);
+
+    GLfloat light1_pos[] = {0.0, 0.0, 1, 1.0};
+    GLfloat light1_colorDif[] = {1.0, 1.0, 1.0, 1};
+    GLfloat Foco_direccao[] = {incFocoX, incFocoY, -1, 0 };		
+	GLfloat Foco_ak = 1.0;
+	GLfloat Foco_al = 0.05f;
+	GLfloat Foco_aq = 0.0f;
+	GLfloat Foco_Expon = 2.0;		// Foco, SPOT_Exponent
+    GLfloat	aberturaFoco = 10.0;		//.. angulo inicial do foco
+    glLightfv(GL_LIGHT1, GL_POSITION, light1_pos);
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_colorDif);
+    /* glLightf(GL_LIGHT1, GL_CONSTANT_ATTENUATION, Foco_ak);
+	glLightf(GL_LIGHT1, GL_LINEAR_ATTENUATION, Foco_al);
+	glLightf(GL_LIGHT1, GL_QUADRATIC_ATTENUATION, Foco_aq); */
+	glLightf(GL_LIGHT1, GL_SPOT_CUTOFF, aberturaFoco);
+	glLightfv(GL_LIGHT1, GL_SPOT_DIRECTION, Foco_direccao);
+	glLightf(GL_LIGHT1, GL_SPOT_EXPONENT, Foco_Expon);
+
+
+    /* glEnable(GL_LIGHT0);
+    light0_flag = 1; */
+    glEnable(GL_LIGHT1); 
 }
 
 
-void materialLightProperties(GLfloat material[4][3]) {
-    glMaterialfv(GL_FRONT, GL_AMBIENT, material[0]);
-    glMaterialfv(GL_FRONT, GL_DIFFUSE, material[1]);
-    glMaterialfv(GL_FRONT, GL_SPECULAR, material[2]);
-    glMaterialf(GL_FRONT, GL_SHININESS, material[3][0]);
+void materialLightProperties(GLfloat material[4][4]) {
+    glMaterialfv(GL_FRONT_AND_BACK, GL_AMBIENT, material[0]);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_DIFFUSE, material[1]);
+    glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, material[2]);
+    glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, material[3][0]);
+}
+
+void turn_on_off_lights() {
+    if (light0_flag == 1) {
+        glDisable(GL_LIGHT0);
+        light0_flag = 0;
+    } else {
+        glEnable(GL_LIGHT0);
+        light0_flag = 1;
+    }
+}
+
+
+void change_light_color() {
+    GLfloat light1_colorDif[] = {random()/(float)(RAND_MAX), random()/(float)(RAND_MAX), random()/(float)(RAND_MAX), 1};
+    glLightfv(GL_LIGHT1, GL_DIFFUSE, light1_colorDif);
+}
+
+void change_light_pos() {
+    
+    if (light1_pos == 0) {
+        GLfloat light1_poss[] = {0.0, 0.0, -20.0, 0};
+        light1_pos = 1;
+        glLightfv(GL_LIGHT0, GL_POSITION, light1_poss);
+    } else {
+        GLfloat light1_poss[] = {0.0, 0.0, 20.0, 0};
+        glLightfv(GL_LIGHT0, GL_POSITION, light1_poss);
+        light1_pos = 0;
+    }
+
+    GLfloat light0_colorDif[] = {0.5, 0.5, 0.5, 1};
+    GLfloat light0_colorSpec[] = {1.0, 1.0, 1.0, 1};
+    glLightfv(GL_LIGHT0, GL_DIFFUSE, light0_colorDif);
+    glLightfv(GL_LIGHT0, GL_SPECULAR, light0_colorSpec);
+
+}
+
+
+void updateLightDirection() {
+    GLfloat Foco_direccao[] = {incFocoX, incFocoY, -1, 0 };		
+    glLightfv(GL_LIGHT1, GL_SPOT_DIRECTION, Foco_direccao);
 }
